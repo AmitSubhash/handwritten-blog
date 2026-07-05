@@ -71,6 +71,23 @@ def convert_page_to_png(rm_path: Path, out_png: Path) -> None:
         input=svg_buffer.getvalue().encode(),
         check=True,
     )
+    # The reMarkable canvas is a fixed 1404x1872 regardless of how much of
+    # the page is actually written on -- trim the blank paper so published
+    # pages don't carry a large empty gap when a page isn't filled.
+    subprocess.run(
+        [
+            "magick",
+            str(out_png),
+            "-trim",
+            "+repage",
+            "-bordercolor",
+            "white",
+            "-border",
+            "40",
+            str(out_png),
+        ],
+        check=True,
+    )
 
 
 def convert_post_pages(post: PostInfo, cache_dir: Path, out_dir: Path) -> list[Path]:

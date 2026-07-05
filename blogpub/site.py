@@ -42,6 +42,18 @@ a { color: #111; }
     background-color: #35c;
     mix-blend-mode: screen;
 }
+.link-icon-hitbox {
+    position: absolute;
+    display: block;
+}
+.link-icon-underline {
+    position: absolute;
+    display: block;
+    height: 3px;
+    border-radius: 2px;
+    background-color: #35c;
+    pointer-events: none;
+}
 ul.post-list { list-style: none; padding: 0; }
 ul.post-list li { margin-bottom: 1.2rem; }
 footer { margin-top: 4rem; color: #999; font-size: 0.85rem; }
@@ -113,6 +125,41 @@ def _format_date(created_time_ms: str) -> str:
         return ""
 
 
+def _render_link(link: LinkRegion) -> str:
+    """Render one link as HTML, styled according to its ``kind``.
+
+    Parameters
+    ----------
+    link : LinkRegion
+        The link to render.
+
+    Returns
+    -------
+    str
+        HTML for this link (one or two elements, depending on kind).
+    """
+    x0, y0, x1, y1 = (v * 100 for v in link.bbox)
+    href = html.escape(link.url)
+    title = html.escape(link.text)
+
+    if link.kind == "icon":
+        # Full-size invisible hitbox (generous click target) plus a thin
+        # underline beneath it, so the artwork itself isn't recolored.
+        return (
+            f'<a class="link-icon-hitbox" href="{href}" title="{title}" '
+            f'style="left:{x0:.2f}%;top:{y0:.2f}%;width:{x1 - x0:.2f}%;'
+            f'height:{y1 - y0:.2f}%"></a>\n'
+            f'<div class="link-icon-underline" '
+            f'style="left:{x0:.2f}%;top:{y1:.2f}%;width:{x1 - x0:.2f}%"></div>'
+        )
+
+    return (
+        f'<a class="link-overlay" href="{href}" title="{title}" '
+        f'style="left:{x0:.2f}%;top:{y0:.2f}%;width:{x1 - x0:.2f}%;'
+        f'height:{y1 - y0:.2f}%"></a>'
+    )
+
+
 def _render_page(image_path: str, page_num: int, links: list[LinkRegion]) -> str:
     """Render one page's image wrapped with any detected link overlays.
 
@@ -131,14 +178,7 @@ def _render_page(image_path: str, page_num: int, links: list[LinkRegion]) -> str
     str
         HTML for this page, including any clickable overlays.
     """
-    overlays = "\n".join(
-        f'<a class="link-overlay" href="{html.escape(link.url)}" '
-        f'title="{html.escape(link.text)}" '
-        f'style="left:{link.bbox[0] * 100:.2f}%;top:{link.bbox[1] * 100:.2f}%;'
-        f"width:{(link.bbox[2] - link.bbox[0]) * 100:.2f}%;"
-        f'height:{(link.bbox[3] - link.bbox[1]) * 100:.2f}%"></a>'
-        for link in links
-    )
+    overlays = "\n".join(_render_link(link) for link in links)
     return (
         f'<div class="page-wrap">\n'
         f'<img class="page-image" src="{image_path}" alt="Page {page_num}">\n'

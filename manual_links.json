@@ -1,9 +1,9 @@
 {
   "700f4c01-40ab-485e-80f5-41033864efa9": {
     "0": [
-      {"text": "Github", "url": "https://github.com/AmitSubhash", "bbox": [0.0997, 0.5877, 0.285, 0.7639]},
-      {"text": "LinkedIn", "url": "https://www.linkedin.com/in/amitsubhash/", "bbox": [0.4203, 0.5877, 0.6268, 0.7639]},
-      {"text": "X", "url": "https://x.com/amit1subhash", "bbox": [0.7479, 0.5877, 0.9509, 0.7639]}
+      {"text": "Github", "url": "https://github.com/AmitSubhash", "bbox": [0.0274, 0.5178, 0.2385, 0.7751], "kind": "icon"},
+      {"text": "LinkedIn", "url": "https://www.linkedin.com/in/amitsubhash/", "bbox": [0.3753, 0.5178, 0.6177, 0.7751], "kind": "icon"},
+      {"text": "X", "url": "https://x.com/amit1subhash", "bbox": [0.7389, 0.5178, 0.9617, 0.7751], "kind": "icon"}
     ]
   }
 }
