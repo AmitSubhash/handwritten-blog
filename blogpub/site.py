@@ -11,6 +11,8 @@ from pathlib import Path
 from .links import LinkRegion
 from .pull import PostInfo
 
+ABOUT_NAMES = {"about", "hi"}
+
 STYLE = """
 body {
     max-width: 720px;
@@ -24,6 +26,7 @@ body {
 h1, h2 { font-weight: normal; }
 a { color: #111; }
 .post-date { color: #666; font-size: 0.9rem; }
+.about-section { margin-bottom: 3rem; }
 .page-wrap {
     position: relative;
     margin: 1.5rem 0;
@@ -36,13 +39,8 @@ a { color: #111; }
 .link-overlay {
     position: absolute;
     display: block;
-    background: rgba(255, 200, 0, 0);
-    outline: 1px dashed rgba(255, 160, 0, 0);
-    transition: background 0.15s, outline-color 0.15s;
-}
-.link-overlay:hover {
-    background: rgba(255, 200, 0, 0.35);
-    outline-color: rgba(255, 140, 0, 0.8);
+    background-color: #35c;
+    mix-blend-mode: screen;
 }
 ul.post-list { list-style: none; padding: 0; }
 ul.post-list li { margin-bottom: 1.2rem; }
@@ -87,6 +85,26 @@ def post_slug(post: PostInfo) -> str:
     return f"{slugify(post.name)}-{post.uuid[:8]}"
 
 
+def is_about_page(post: PostInfo) -> bool:
+    """Check whether a post should render as the site's About/intro section.
+
+    A notebook named "About" or "Hi" (case-insensitive) is treated as the
+    site's intro: shown inline at the top of the index page instead of in
+    the chronological post list.
+
+    Parameters
+    ----------
+    post : PostInfo
+        The post to check.
+
+    Returns
+    -------
+    bool
+        True if this post is the About/intro page.
+    """
+    return post.name.strip().lower() in ABOUT_NAMES
+
+
 def _format_date(created_time_ms: str) -> str:
     try:
         dt = datetime.fromtimestamp(int(created_time_ms) / 1000, tz=timezone.utc)
@@ -101,7 +119,7 @@ def _render_page(image_path: str, page_num: int, links: list[LinkRegion]) -> str
     Parameters
     ----------
     image_path : str
-        Relative path (from the post HTML file) to this page's PNG.
+        Relative path (from the HTML file referencing it) to this page's PNG.
     page_num : int
         1-indexed page number, used for the image's alt text.
     links : list of LinkRegion
@@ -125,6 +143,15 @@ def _render_page(image_path: str, page_num: int, links: list[LinkRegion]) -> str
         f'<div class="page-wrap">\n'
         f'<img class="page-image" src="{image_path}" alt="Page {page_num}">\n'
         f"{overlays}\n</div>"
+    )
+
+
+def _render_pages(
+    page_image_paths: list[str], page_links: list[list[LinkRegion]]
+) -> str:
+    return "\n".join(
+        _render_page(path, i + 1, links)
+        for i, (path, links) in enumerate(zip(page_image_paths, page_links))
     )
 
 
@@ -154,10 +181,7 @@ def render_post(
     title = html.escape(post.name)
     if page_links is None:
         page_links = [[] for _ in page_image_paths]
-    images_html = "\n".join(
-        _render_page(path, i + 1, links)
-        for i, (path, links) in enumerate(zip(page_image_paths, page_links))
-    )
+    images_html = _render_pages(page_image_paths, page_links)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -176,13 +200,16 @@ def render_post(
 """
 
 
-def render_index(posts: list[PostInfo]) -> str:
+def render_index(posts: list[PostInfo], about_pages_html: str = "") -> str:
     """Render the site index listing all posts, newest first.
 
     Parameters
     ----------
     posts : list of PostInfo
-        All published posts.
+        All published posts (excluding the About/intro page, if any).
+    about_pages_html : str, optional
+        Pre-rendered HTML for the About/intro page's images, shown above
+        the post list. Empty string if there is no About page.
 
     Returns
     -------
@@ -195,6 +222,11 @@ def render_index(posts: list[PostInfo]) -> str:
         f'<span class="post-date">{_format_date(p.created_time)}</span></li>'
         for p in ordered
     )
+    about_section = (
+        f'<div class="about-section">{about_pages_html}</div>'
+        if about_pages_html
+        else ""
+    )
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -203,7 +235,7 @@ def render_index(posts: list[PostInfo]) -> str:
 <style>{STYLE}</style>
 </head>
 <body>
-<h1>Marginalia</h1>
+{about_section}
 <ul class="post-list">
 {items}
 </ul>
@@ -218,6 +250,10 @@ def write_site(
     docs_dir: Path,
 ) -> None:
     """Write the full static site (index + posts + images) into a docs directory.
+
+    A post named "About" or "Hi" (see :func:`is_about_page`) is rendered
+    inline at the top of the index page instead of as a regular
+    chronological post entry.
 
     Replaces the entire ``posts/`` and ``images/`` subdirectories on each
     run, so notebooks removed from the Blog folder don't linger as stale
@@ -238,21 +274,31 @@ def write_site(
     posts_dir.mkdir(parents=True, exist_ok=True)
     images_dir.mkdir(parents=True, exist_ok=True)
 
+    regular_posts = []
+    about_html = ""
+
     for post, page_paths, page_links in posts_with_pages:
         slug = post_slug(post)
         post_image_dir = images_dir / slug
         post_image_dir.mkdir(parents=True, exist_ok=True)
 
-        relative_paths = []
         for i, src in enumerate(page_paths):
             dest = post_image_dir / f"page_{i:03d}.png"
             dest.write_bytes(src.read_bytes())
-            relative_paths.append(f"../images/{slug}/page_{i:03d}.png")
 
+        if is_about_page(post):
+            about_paths = [
+                f"images/{slug}/page_{i:03d}.png" for i in range(len(page_paths))
+            ]
+            about_html = _render_pages(about_paths, page_links)
+            continue
+
+        relative_paths = [
+            f"../images/{slug}/page_{i:03d}.png" for i in range(len(page_paths))
+        ]
         (posts_dir / f"{slug}.html").write_text(
             render_post(post, relative_paths, page_links)
         )
+        regular_posts.append(post)
 
-    (docs_dir / "index.html").write_text(
-        render_index([p for p, _, _ in posts_with_pages])
-    )
+    (docs_dir / "index.html").write_text(render_index(regular_posts, about_html))

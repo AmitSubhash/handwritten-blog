@@ -87,3 +87,37 @@ def detect_links(png_path: Path, model: str = DEFAULT_MODEL) -> list[LinkRegion]
         except (KeyError, TypeError, ValueError):
             continue
     return links
+
+
+def load_manual_links(path: Path) -> dict[str, dict[int, list[LinkRegion]]]:
+    """Load manually-specified links for pages the auto-detector can't handle.
+
+    Useful for things like hand-drawn icons with no literal URL text for
+    the vision model to read. Expected JSON shape::
+
+        {"<notebook-uuid>": {"<page-index>": [{"text", "url", "bbox"}, ...]}}
+
+    Parameters
+    ----------
+    path : Path
+        Path to the manual links JSON file.
+
+    Returns
+    -------
+    dict
+        Empty dict if the file doesn't exist. Otherwise maps notebook UUID
+        to a dict of page index -> list of LinkRegion.
+    """
+    if not path.exists():
+        return {}
+    raw = json.loads(path.read_text())
+    return {
+        uuid: {
+            int(page_idx): [
+                LinkRegion(text=e["text"], url=e["url"], bbox=tuple(e["bbox"]))
+                for e in entries
+            ]
+            for page_idx, entries in pages.items()
+        }
+        for uuid, pages in raw.items()
+    }

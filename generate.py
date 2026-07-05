@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 
 from blogpub.convert import convert_post_pages
-from blogpub.links import detect_links
+from blogpub.links import detect_links, load_manual_links
 from blogpub.pull import (
     find_folder_uuid,
     list_posts_in_folder,
@@ -30,6 +30,12 @@ def main() -> None:
     )
     parser.add_argument("--docs-dir", type=Path, default=Path(__file__).parent / "docs")
     parser.add_argument("--cache-dir", type=Path, default=None)
+    parser.add_argument(
+        "--manual-links",
+        type=Path,
+        default=Path(__file__).parent / "manual_links.json",
+        help="Path to manually-specified links (e.g. for hand-drawn icons)",
+    )
     parser.add_argument(
         "--no-links",
         action="store_true",
@@ -58,6 +64,7 @@ def main() -> None:
             print(f'No notebooks found in the "{args.folder}" folder yet.')
             return
 
+        manual_links = load_manual_links(args.manual_links)
         pages_dir = cache_dir / "_pages"
         posts_with_pages = []
         for post in posts:
@@ -73,6 +80,11 @@ def main() -> None:
             else:
                 print(f"  Scanning {len(png_paths)} page(s) for handwritten links...")
                 page_links = [detect_links(p) for p in png_paths]
+
+            post_manual_links = manual_links.get(post.uuid, {})
+            for i, extra in post_manual_links.items():
+                if i < len(page_links):
+                    page_links[i] = page_links[i] + extra
 
             posts_with_pages.append((post, png_paths, page_links))
 
