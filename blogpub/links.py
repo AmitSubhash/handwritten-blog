@@ -33,19 +33,15 @@ class LinkRegion:
     url : str
         The URL it should link to.
     bbox : tuple of float
-        ``(x0, y0, x1, y1)``, each a fraction of image width/height.
-    kind : str, optional
-        ``"text"`` (default) tints the ink blue via mix-blend-mode, which
-        looks right over a line of handwriting but recolors a whole
-        drawing if applied to one. ``"icon"`` instead draws a plain
-        underline beneath the region, leaving artwork (e.g. hand-drawn
-        logos) untouched.
+        ``(x0, y0, x1, y1)``, each a fraction of image width/height. Tint
+        the ink blue via mix-blend-mode -- for manual links on non-text
+        artwork (e.g. a hand-drawn logo), target just the label text next
+        to it rather than the whole drawing, so only the text turns blue.
     """
 
     text: str
     url: str
     bbox: tuple[float, float, float, float]
-    kind: str = "text"
 
 
 def detect_links(png_path: Path, model: str = DEFAULT_MODEL) -> list[LinkRegion]:
@@ -121,12 +117,7 @@ def load_manual_links(path: Path) -> dict[str, dict[int, list[LinkRegion]]]:
     return {
         uuid: {
             int(page_idx): [
-                LinkRegion(
-                    text=e["text"],
-                    url=e["url"],
-                    bbox=tuple(e["bbox"]),
-                    kind=e.get("kind", "text"),
-                )
+                LinkRegion(text=e["text"], url=e["url"], bbox=tuple(e["bbox"]))
                 for e in entries
             ]
             for page_idx, entries in pages.items()

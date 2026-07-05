@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <title>Marginalia</title>
 <style>
+* { box-sizing: border-box; }
 body {
-    max-width: 720px;
+    max-width: 900px;
     margin: 3rem auto;
     padding: 0 1.5rem;
     font-family: Georgia, "Times New Roman", serif;
@@ -20,6 +21,7 @@ a { color: #111; }
 .page-wrap {
     position: relative;
     margin: 1.5rem 0;
+    width: 100%;
 }
 .page-image {
     width: 100%;
@@ -32,18 +34,6 @@ a { color: #111; }
     background-color: #35c;
     mix-blend-mode: screen;
 }
-.link-icon-hitbox {
-    position: absolute;
-    display: block;
-}
-.link-icon-underline {
-    position: absolute;
-    display: block;
-    height: 3px;
-    border-radius: 2px;
-    background-color: #35c;
-    pointer-events: none;
-}
 ul.post-list { list-style: none; padding: 0; }
 ul.post-list li { margin-bottom: 1.2rem; }
 footer { margin-top: 4rem; color: #999; font-size: 0.85rem; }
@@ -52,12 +42,9 @@ footer { margin-top: 4rem; color: #999; font-size: 0.85rem; }
 <body>
 <div class="about-section"><div class="page-wrap">
 <img class="page-image" src="images/hi-700f4c01/page_000.png" alt="Page 1">
-<a class="link-icon-hitbox" href="https://github.com/AmitSubhash" title="Github" style="left:2.74%;top:51.78%;width:21.11%;height:25.73%"></a>
-<div class="link-icon-underline" style="left:2.74%;top:77.51%;width:21.11%"></div>
-<a class="link-icon-hitbox" href="https://www.linkedin.com/in/amitsubhash/" title="LinkedIn" style="left:37.53%;top:51.78%;width:24.24%;height:25.73%"></a>
-<div class="link-icon-underline" style="left:37.53%;top:77.51%;width:24.24%"></div>
-<a class="link-icon-hitbox" href="https://x.com/amit1subhash" title="X" style="left:73.89%;top:51.78%;width:22.28%;height:25.73%"></a>
-<div class="link-icon-underline" style="left:73.89%;top:77.51%;width:22.28%"></div>
+<a class="link-overlay" href="https://github.com/AmitSubhash" title="Github" style="left:2.74%;top:74.02%;width:17.59%;height:4.44%"></a>
+<a class="link-overlay" href="https://www.linkedin.com/in/amitsubhash/" title="LinkedIn" style="left:38.70%;top:74.02%;width:23.07%;height:4.44%"></a>
+<a class="link-overlay" href="https://x.com/amit1subhash" title="X" style="left:82.49%;top:74.02%;width:5.86%;height:3.81%"></a>
 </div></div>
 <ul class="post-list">
 
