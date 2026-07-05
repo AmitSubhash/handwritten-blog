@@ -8,6 +8,7 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .links import LinkRegion
 from .pull import PostInfo
 
 STYLE = """
@@ -23,11 +24,25 @@ body {
 h1, h2 { font-weight: normal; }
 a { color: #111; }
 .post-date { color: #666; font-size: 0.9rem; }
+.page-wrap {
+    position: relative;
+    margin: 1.5rem 0;
+}
 .page-image {
     width: 100%;
     border: 1px solid #ddd;
-    margin: 1.5rem 0;
     display: block;
+}
+.link-overlay {
+    position: absolute;
+    display: block;
+    background: rgba(255, 200, 0, 0);
+    outline: 1px dashed rgba(255, 160, 0, 0);
+    transition: background 0.15s, outline-color 0.15s;
+}
+.link-overlay:hover {
+    background: rgba(255, 200, 0, 0.35);
+    outline-color: rgba(255, 140, 0, 0.8);
 }
 ul.post-list { list-style: none; padding: 0; }
 ul.post-list li { margin-bottom: 1.2rem; }
@@ -80,7 +95,44 @@ def _format_date(created_time_ms: str) -> str:
         return ""
 
 
-def render_post(post: PostInfo, page_image_paths: list[str]) -> str:
+def _render_page(image_path: str, page_num: int, links: list[LinkRegion]) -> str:
+    """Render one page's image wrapped with any detected link overlays.
+
+    Parameters
+    ----------
+    image_path : str
+        Relative path (from the post HTML file) to this page's PNG.
+    page_num : int
+        1-indexed page number, used for the image's alt text.
+    links : list of LinkRegion
+        Handwritten links detected on this page (bounding boxes are
+        approximate -- a vision model's estimate, not pixel-exact).
+
+    Returns
+    -------
+    str
+        HTML for this page, including any clickable overlays.
+    """
+    overlays = "\n".join(
+        f'<a class="link-overlay" href="{html.escape(link.url)}" '
+        f'title="{html.escape(link.text)}" '
+        f'style="left:{link.bbox[0] * 100:.2f}%;top:{link.bbox[1] * 100:.2f}%;'
+        f"width:{(link.bbox[2] - link.bbox[0]) * 100:.2f}%;"
+        f'height:{(link.bbox[3] - link.bbox[1]) * 100:.2f}%"></a>'
+        for link in links
+    )
+    return (
+        f'<div class="page-wrap">\n'
+        f'<img class="page-image" src="{image_path}" alt="Page {page_num}">\n'
+        f"{overlays}\n</div>"
+    )
+
+
+def render_post(
+    post: PostInfo,
+    page_image_paths: list[str],
+    page_links: list[list[LinkRegion]] | None = None,
+) -> str:
     """Render a single post's HTML page.
 
     Parameters
@@ -89,6 +141,10 @@ def render_post(post: PostInfo, page_image_paths: list[str]) -> str:
         The notebook being rendered.
     page_image_paths : list of str
         Relative (from the post HTML file) paths to each page's PNG image.
+    page_links : list of (list of LinkRegion), optional
+        Detected handwritten links per page, same order as
+        ``page_image_paths``. Pages with no detected links can use an empty
+        list. Defaults to no links on any page.
 
     Returns
     -------
@@ -96,9 +152,11 @@ def render_post(post: PostInfo, page_image_paths: list[str]) -> str:
         Full HTML document for this post.
     """
     title = html.escape(post.name)
+    if page_links is None:
+        page_links = [[] for _ in page_image_paths]
     images_html = "\n".join(
-        f'<img class="page-image" src="{path}" alt="Page {i + 1}">'
-        for i, path in enumerate(page_image_paths)
+        _render_page(path, i + 1, links)
+        for i, (path, links) in enumerate(zip(page_image_paths, page_links))
     )
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -141,11 +199,11 @@ def render_index(posts: list[PostInfo]) -> str:
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Handwritten</title>
+<title>Marginalia</title>
 <style>{STYLE}</style>
 </head>
 <body>
-<h1>Handwritten</h1>
+<h1>Marginalia</h1>
 <ul class="post-list">
 {items}
 </ul>
@@ -156,7 +214,8 @@ def render_index(posts: list[PostInfo]) -> str:
 
 
 def write_site(
-    posts_with_pages: list[tuple[PostInfo, list[Path]]], docs_dir: Path
+    posts_with_pages: list[tuple[PostInfo, list[Path], list[list[LinkRegion]]]],
+    docs_dir: Path,
 ) -> None:
     """Write the full static site (index + posts + images) into a docs directory.
 
@@ -166,8 +225,9 @@ def write_site(
 
     Parameters
     ----------
-    posts_with_pages : list of (PostInfo, list of Path)
-        Each post paired with its ordered page PNG paths.
+    posts_with_pages : list of (PostInfo, list of Path, list of list of LinkRegion)
+        Each post paired with its ordered page PNG paths and per-page
+        detected links.
     docs_dir : Path
         Output directory (e.g. a repo's ``docs/`` folder for GitHub Pages).
     """
@@ -178,7 +238,7 @@ def write_site(
     posts_dir.mkdir(parents=True, exist_ok=True)
     images_dir.mkdir(parents=True, exist_ok=True)
 
-    for post, page_paths in posts_with_pages:
+    for post, page_paths, page_links in posts_with_pages:
         slug = post_slug(post)
         post_image_dir = images_dir / slug
         post_image_dir.mkdir(parents=True, exist_ok=True)
@@ -189,6 +249,10 @@ def write_site(
             dest.write_bytes(src.read_bytes())
             relative_paths.append(f"../images/{slug}/page_{i:03d}.png")
 
-        (posts_dir / f"{slug}.html").write_text(render_post(post, relative_paths))
+        (posts_dir / f"{slug}.html").write_text(
+            render_post(post, relative_paths, page_links)
+        )
 
-    (docs_dir / "index.html").write_text(render_index([p for p, _ in posts_with_pages]))
+    (docs_dir / "index.html").write_text(
+        render_index([p for p, _, _ in posts_with_pages])
+    )

@@ -1,4 +1,4 @@
-# handwritten-blog
+# marginalia
 
 A blog written entirely by hand on a reMarkable tablet, published as a plain
 static site via GitHub Pages. Inspired by
@@ -17,6 +17,22 @@ static site via GitHub Pages. Inspired by
 Only notebooks explicitly filed into the "Blog" folder are ever published.
 Everything else on the tablet stays private.
 
+## Hyperlinks in handwriting
+
+If you write a URL by hand on a page (e.g. `example.com/paper`), it becomes
+a real clickable link on the published post -- an invisible overlay
+highlights on hover. Detection uses Claude's vision model to find any
+handwritten web addresses and their approximate position, since there's no
+way to derive link coordinates from the raw ink data directly.
+
+This is a lower-effort alternative to
+[danieljanus's implementation](https://handwritten.danieljanus.pl/2022-10-01-hyperlinks-in-handwriting.html),
+which overlays HTML image-map regions at manually-identified pixel
+coordinates. Automated bounding boxes from a vision model are approximate,
+not pixel-exact -- treat the resulting overlay as a best-effort convenience.
+Pass `--no-links` to `generate.py` to skip this (one fewer Claude call per
+page) if you don't need it.
+
 ## Requirements
 
 - SSH access to the tablet (see [rmscribe](https://github.com/AmitSubhash/rmscribe)
@@ -32,12 +48,3 @@ source .venv/bin/activate
 pip install -r requirements.txt
 python generate.py
 ```
-
-## Future ideas (not yet built)
-
-- **Hyperlinks in handwriting**: [danieljanus's implementation](https://handwritten.danieljanus.pl/2022-10-01-hyperlinks-in-handwriting.html)
-  overlays clickable HTML image-map regions on top of the page PNGs at
-  manually-identified pixel coordinates. A lower-effort automated version
-  could ask Claude's vision model for approximate bounding boxes of any
-  URLs/references written on the page, at the cost of some positioning
-  imprecision -- untested.

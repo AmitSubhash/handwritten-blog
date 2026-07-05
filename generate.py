@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 from blogpub.convert import convert_post_pages
+from blogpub.links import detect_links
 from blogpub.pull import (
     find_folder_uuid,
     list_posts_in_folder,
@@ -29,6 +30,11 @@ def main() -> None:
     )
     parser.add_argument("--docs-dir", type=Path, default=Path(__file__).parent / "docs")
     parser.add_argument("--cache-dir", type=Path, default=None)
+    parser.add_argument(
+        "--no-links",
+        action="store_true",
+        help="Skip handwritten-link detection (faster, one fewer Claude call per page)",
+    )
     args = parser.parse_args()
 
     cache_dir = args.cache_dir or Path(tempfile.mkdtemp(prefix="blogpub-"))
@@ -58,10 +64,17 @@ def main() -> None:
             print(f"Pulling and converting {post.name!r}...")
             pull_notebook_pages(args.ssh_host, post.uuid, cache_dir)
             png_paths = convert_post_pages(post, cache_dir, pages_dir)
-            if png_paths:
-                posts_with_pages.append((post, png_paths))
-            else:
+            if not png_paths:
                 print(f"  (no pages, skipping {post.name!r})")
+                continue
+
+            if args.no_links:
+                page_links = [[] for _ in png_paths]
+            else:
+                print(f"  Scanning {len(png_paths)} page(s) for handwritten links...")
+                page_links = [detect_links(p) for p in png_paths]
+
+            posts_with_pages.append((post, png_paths, page_links))
 
         write_site(posts_with_pages, args.docs_dir)
         print(f"Wrote {len(posts_with_pages)} post(s) to {args.docs_dir}")
