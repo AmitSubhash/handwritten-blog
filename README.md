@@ -27,7 +27,7 @@ Everything the site does is driven by what you name a notebook inside the
 | `Blog` (folder) | The one folder that gets published. Nothing outside it is ever touched. |
 | `Hi` or `About` | The intro shown at the top of the main page (not listed as a post). |
 | `wordmark` or `title` | The handwritten site header / home link (your "amit"). Renders on post pages; the main page shows no header. |
-| `sun` **and** `moon` | The hand-drawn light/dark toggle. Draw both, and a corner button appears that shows the moon in light mode and the sun in dark mode; it remembers the reader's choice. Draw only one (or neither) and the site just follows the reader's system preference with no toggle. |
+| `sun` **and** `moon` | The hand-drawn light/dark toggle. Draw both, and a corner button appears that shows the sun in light mode and the moon in dark mode (click it to flip); it remembers the reader's choice. The two are auto-scaled to a matched size, so it's fine if you drew them differently. Draw only one (or neither) and the site just follows the reader's system preference with no toggle. |
 | anything else | A normal blog post, listed newest-first. |
 
 **Adding a new post:** make a new notebook, file it in `Blog`, done. Its name

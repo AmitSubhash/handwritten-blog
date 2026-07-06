@@ -12,27 +12,57 @@
 <meta property="og:image" content="https://amitsubhash.github.io/marginalia/images/hi-700f4c01/page_000.png">
 <meta name="twitter:card" content="summary_large_image">
 <style>
+/* Theme is driven by CSS variables so a hand-drawn sun/moon toggle can
+   override the system preference. Light values are the defaults; dark values
+   apply either when the OS asks for dark (and the reader hasn't chosen light)
+   or when the reader explicitly picks dark via the toggle. */
+:root {
+    --bg: #fff;
+    --fg: #111;
+    --fg-muted: #aaa;
+    --heading: #666;
+    --link-hover: #35c;
+    --page-filter: none;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bg: #000;
+        --fg: #ddd;
+        --fg-muted: #888;
+        --heading: #999;
+        --link-hover: #7aa5f0;
+        --page-filter: invert(1) hue-rotate(180deg);
+    }
+}
+:root[data-theme="dark"] {
+    --bg: #000;
+    --fg: #ddd;
+    --fg-muted: #888;
+    --heading: #999;
+    --link-hover: #7aa5f0;
+    --page-filter: invert(1) hue-rotate(180deg);
+}
 * { box-sizing: border-box; }
 body {
     max-width: 1100px;
     margin: 3rem auto;
     padding: 0 1.5rem;
     font-family: Georgia, "Times New Roman", serif;
-    color: #111;
-    background: #fff;
+    color: var(--fg);
+    background: var(--bg);
     line-height: 1.5;
 }
 h1, h2 { font-weight: normal; }
 h1 { font-style: italic; text-transform: lowercase; }
-a { color: #111; text-decoration-color: #35c; text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
-a:hover { color: #35c; }
+a { color: var(--fg); text-decoration-color: #35c; text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+a:hover { color: var(--link-hover); }
 .site-title { text-align: center; margin: 1.5rem 0 3rem; }
 .site-title a {
     font-style: italic;
     font-size: 1.6rem;
     letter-spacing: 0.02em;
     text-decoration: none;
-    color: #111;
+    color: var(--fg);
     display: inline-block;
 }
 /* Size the handwritten wordmark by height (a single word); clamp so it never
@@ -42,12 +72,13 @@ a:hover { color: #35c; }
     width: auto;
     display: block;
     margin: 0 auto;
+    filter: var(--page-filter);
 }
 .site-title a:hover .wordmark { opacity: 0.55; }
 /* Dates are the only typeset text left; keep them quiet, like the printed
    page numbers in a real notebook rather than body copy. */
 .post-date {
-    color: #aaa;
+    color: var(--fg-muted);
     font-size: 0.72rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -61,6 +92,7 @@ a:hover { color: #35c; }
     position: relative;
     margin: 0.5rem 0;
     width: 100%;
+    filter: var(--page-filter);
 }
 .page-image {
     width: 100%;
@@ -79,7 +111,7 @@ a:hover { color: #35c; }
 h2.posts-heading {
     font-style: italic;
     font-weight: normal;
-    color: #666;
+    color: var(--heading);
     margin-top: 2rem;
 }
 ul.post-list { list-style: none; padding: 0; }
@@ -91,20 +123,60 @@ ul.post-list li {
 }
 ul.post-list .post-date { min-width: 7.5rem; }
 
-/* Dark mode keeps the seamless blend by inverting the scanned pages: white
-   paper becomes near-black (matching the page), black ink becomes light. */
-@media (prefers-color-scheme: dark) {
-    body { background: #000; color: #ddd; }
-    a { color: #ddd; }
-    a:hover { color: #7aa5f0; }
-    .site-title a { color: #ddd; }
-    .page-wrap, .wordmark { filter: invert(1) hue-rotate(180deg); }
-    .post-date { color: #888; }
-    h2.posts-heading { color: #999; }
+/* Hand-drawn light/dark toggle: a quiet corner button holding both the sun and
+   the moon. The icon shows the *current* mode -- the sun in light mode, the
+   moon in dark mode -- and clicking it switches. It inverts with the page so
+   the ink reads correctly against either background. */
+.theme-toggle {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 10;
+    background: none;
+    border: none;
+    padding: 0.3rem;
+    margin: 0;
+    cursor: pointer;
+    line-height: 0;
 }
-</style>
+.theme-toggle img {
+    /* Big enough that the hand-drawn detail (sun rays, moon craters) reads at a
+       glance and the button is a comfortable tap target on mobile. */
+    height: 2.7rem;
+    width: auto;
+    display: block;
+    filter: var(--page-filter);
+}
+.theme-toggle .icon-moon { display: none; }
+.theme-toggle .icon-sun { display: block; }
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun { display: none; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: block; }
+}
+:root[data-theme="dark"] .theme-toggle .icon-sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .icon-moon { display: block; }
+:root[data-theme="light"] .theme-toggle .icon-sun { display: block; }
+:root[data-theme="light"] .theme-toggle .icon-moon { display: none; }
+</style><script>
+(function () {
+  var root = document.documentElement;
+  try {
+    var saved = localStorage.getItem('theme');
+    if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved);
+  } catch (e) {}
+  window.__toggleTheme = function () {
+    var systemDark = window.matchMedia
+      && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var current = root.getAttribute('data-theme') || (systemDark ? 'dark' : 'light');
+    var next = current === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('theme', next); } catch (e) {}
+  };
+})();
+</script>
 </head>
 <body>
+<button class="theme-toggle" type="button" onclick="__toggleTheme()" aria-label="Switch between light and dark mode" title="Switch between light and dark mode"><img class="icon-sun" src="sun.png" alt="Switch to dark mode"><img class="icon-moon" src="moon.png" alt="Switch to light mode"></button>
 
 <div class="about-section"><div class="page-wrap">
 <img class="page-image" src="images/hi-700f4c01/page_000.png" alt="Handwritten introduction card reading &#x27;Hi! I&#x27;m Amit, First Year Neuro engineering PhD Student @ Indiana University, find my handwritten yaps?&#x27; with icons for GitHub, LinkedIn, and X, and contact text &#x27;lmk if you have some niche cool yap at subhas [at] iu [dot] edu&#x27;." width="1279" height="1574" loading="eager" decoding="async">

@@ -11,6 +11,7 @@ from pathlib import Path
 from blogpub.convert import (
     convert_post_pages,
     first_page_ids,
+    normalize_icon_pair,
     thumbnail_to_wordmark,
     wordmark_render_is_clean,
 )
@@ -226,6 +227,11 @@ def main() -> None:
 
         if not args.no_vision:
             save_vision_cache(vision_cache_path, vision_cache)
+
+        # Match the sun and moon to the same size so the toggle button looks
+        # consistent in either state, however differently they were drawn.
+        if chrome["sun"] is not None and chrome["moon"] is not None:
+            normalize_icon_pair([chrome["sun"], chrome["moon"]])
 
         write_site(
             posts_with_pages,

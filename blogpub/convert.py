@@ -7,6 +7,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import numpy as np
+from PIL import Image
 from rmscene import read_tree
 
 from .blocks import center_blocks
@@ -244,3 +246,65 @@ def thumbnail_to_wordmark(thumb_path: Path, out_png: Path) -> None:
         ],
         check=True,
     )
+
+
+def _ink_bbox(arr: np.ndarray, ink_threshold: int) -> tuple[int, int, int, int] | None:
+    """Return the (left, top, right, bottom) bounding box of ink in a grayscale
+    array, or None if there is no ink. ``right``/``bottom`` are exclusive."""
+    ink = arr < ink_threshold
+    rows = np.any(ink, axis=1)
+    cols = np.any(ink, axis=0)
+    if not rows.any():
+        return None
+    row_idx = np.flatnonzero(rows)
+    col_idx = np.flatnonzero(cols)
+    return int(col_idx[0]), int(row_idx[0]), int(col_idx[-1] + 1), int(row_idx[-1] + 1)
+
+
+def normalize_icon_pair(
+    paths: list[Path], *, ink_threshold: int = 200, margin_frac: float = 0.14
+) -> None:
+    """Make a set of small ink icons render at a matched size.
+
+    Toggle icons are drawn by hand at whatever scale is convenient, so a sun
+    and a moon can arrive very differently sized. This trims each to its ink,
+    scales every icon so its longest ink dimension matches the largest icon's,
+    then centers each in an identical square canvas. The result: both icons
+    share the same footprint and the same visual weight, so the corner button
+    is the same size in either toggle state and neither icon looks bigger.
+
+    Modifies the files in place.
+
+    Parameters
+    ----------
+    paths : list of Path
+        Icon PNGs to normalize together (e.g. the sun and the moon).
+    ink_threshold : int, optional
+        Grayscale value below which a pixel counts as ink (0-255).
+    margin_frac : float, optional
+        White padding around the ink, as a fraction of the matched ink size.
+    """
+    cropped: list[Image.Image | None] = []
+    for path in paths:
+        arr = np.asarray(Image.open(path).convert("L"))
+        bbox = _ink_bbox(arr, ink_threshold)
+        cropped.append(
+            Image.fromarray(arr[bbox[1] : bbox[3], bbox[0] : bbox[2]]) if bbox else None
+        )
+
+    reaches = [max(img.size) for img in cropped if img is not None]
+    if not reaches:
+        return
+    target = max(reaches)
+    side = int(round(target * (1 + 2 * margin_frac)))
+
+    for img, path in zip(cropped, paths):
+        if img is None:
+            continue
+        scale = target / max(img.size)
+        width = max(1, round(img.width * scale))
+        height = max(1, round(img.height * scale))
+        resized = img.resize((width, height), Image.Resampling.LANCZOS)
+        canvas = Image.new("L", (side, side), 255)
+        canvas.paste(resized, ((side - width) // 2, (side - height) // 2))
+        canvas.save(path)

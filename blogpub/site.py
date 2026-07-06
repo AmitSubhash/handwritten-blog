@@ -139,9 +139,9 @@ ul.post-list li {
 ul.post-list .post-date { min-width: 7.5rem; }
 
 /* Hand-drawn light/dark toggle: a quiet corner button holding both the sun and
-   the moon. Only the icon for the mode you'd switch *to* is shown -- the moon
-   in light mode, the sun in dark mode -- and it inverts with the page so the
-   ink reads correctly against either background. */
+   the moon. The icon shows the *current* mode -- the sun in light mode, the
+   moon in dark mode -- and clicking it switches. It inverts with the page so
+   the ink reads correctly against either background. */
 .theme-toggle {
     position: fixed;
     top: 1rem;
@@ -155,21 +155,23 @@ ul.post-list .post-date { min-width: 7.5rem; }
     line-height: 0;
 }
 .theme-toggle img {
-    height: 1.9rem;
+    /* Big enough that the hand-drawn detail (sun rays, moon craters) reads at a
+       glance and the button is a comfortable tap target on mobile. */
+    height: 2.7rem;
     width: auto;
     display: block;
     filter: var(--page-filter);
 }
-.theme-toggle .icon-sun { display: none; }
-.theme-toggle .icon-moon { display: block; }
+.theme-toggle .icon-moon { display: none; }
+.theme-toggle .icon-sun { display: block; }
 @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
-    :root:not([data-theme="light"]) .theme-toggle .icon-sun { display: block; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun { display: none; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: block; }
 }
-:root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
-:root[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
-:root[data-theme="light"] .theme-toggle .icon-moon { display: block; }
-:root[data-theme="light"] .theme-toggle .icon-sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .icon-sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .icon-moon { display: block; }
+:root[data-theme="light"] .theme-toggle .icon-sun { display: block; }
+:root[data-theme="light"] .theme-toggle .icon-moon { display: none; }
 """
 
 # Runs in <head> before the body paints, so an explicit light/dark choice is
@@ -314,8 +316,8 @@ def _theme_toggle_html(sun_src: str | None, moon_src: str | None) -> str:
         '<button class="theme-toggle" type="button" onclick="__toggleTheme()" '
         'aria-label="Switch between light and dark mode" '
         'title="Switch between light and dark mode">'
-        f'<img class="icon-moon" src="{moon_src}" alt="Switch to dark mode">'
-        f'<img class="icon-sun" src="{sun_src}" alt="Switch to light mode">'
+        f'<img class="icon-sun" src="{sun_src}" alt="Switch to dark mode">'
+        f'<img class="icon-moon" src="{moon_src}" alt="Switch to light mode">'
         "</button>"
     )
 
