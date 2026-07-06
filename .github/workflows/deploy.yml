@@ -34,3 +34,10 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+        with:
+          # GitHub's Pages deploy backend intermittently returns
+          # "Deployment failed, try again later"; give it a longer window
+          # and more attempts so it rides out the transient instead of
+          # needing a manual re-run.
+          timeout: 600000
+          error_count: 25
