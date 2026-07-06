@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 
 from blogpub.convert import convert_post_pages
-from blogpub.links import detect_links, load_manual_links
+from blogpub.links import analyze_page, load_manual_links
 from blogpub.pull import (
     find_folder_uuid,
     list_posts_in_folder,
@@ -17,6 +17,8 @@ from blogpub.pull import (
     pull_notebook_pages,
 )
 from blogpub.site import write_site
+
+FALLBACK_ALT_TEXT = "A handwritten notebook page."
 
 
 def main() -> None:
@@ -37,9 +39,10 @@ def main() -> None:
         help="Path to manually-specified links (e.g. for hand-drawn icons)",
     )
     parser.add_argument(
-        "--no-links",
+        "--no-vision",
         action="store_true",
-        help="Skip handwritten-link detection (faster, one fewer Claude call per page)",
+        help="Skip the vision-model pass (alt text + handwritten-link detection) "
+        "-- faster, but pages get generic alt text and no auto-detected links",
     )
     args = parser.parse_args()
 
@@ -75,18 +78,21 @@ def main() -> None:
                 print(f"  (no pages, skipping {post.name!r})")
                 continue
 
-            if args.no_links:
+            if args.no_vision:
+                page_alt_text = [FALLBACK_ALT_TEXT for _ in png_paths]
                 page_links = [[] for _ in png_paths]
             else:
-                print(f"  Scanning {len(png_paths)} page(s) for handwritten links...")
-                page_links = [detect_links(p) for p in png_paths]
+                print(f"  Analyzing {len(png_paths)} page(s)...")
+                analyses = [analyze_page(p) for p in png_paths]
+                page_alt_text = [a.alt_text for a in analyses]
+                page_links = [a.links for a in analyses]
 
             post_manual_links = manual_links.get(post.uuid, {})
             for i, extra in post_manual_links.items():
                 if i < len(page_links):
                     page_links[i] = page_links[i] + extra
 
-            posts_with_pages.append((post, png_paths, page_links))
+            posts_with_pages.append((post, png_paths, page_alt_text, page_links))
 
         write_site(posts_with_pages, args.docs_dir)
         print(f"Wrote {len(posts_with_pages)} post(s) to {args.docs_dir}")

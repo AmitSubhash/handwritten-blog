@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import re
 import shutil
+import struct
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,6 +13,15 @@ from .links import LinkRegion
 from .pull import PostInfo
 
 ABOUT_NAMES = {"about", "hi"}
+SITE_URL = "https://amitsubhash.github.io/marginalia"
+SITE_DESCRIPTION = (
+    "A blog written by hand on a reMarkable, published straight from the ink."
+)
+FAVICON = (
+    "data:image/svg+xml,"
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>"
+    "<text y='.9em' font-size='90'>%E2%9C%8E</text></svg>"
+)
 
 STYLE = """
 * { box-sizing: border-box; }
@@ -21,12 +31,22 @@ body {
     padding: 0 1.5rem;
     font-family: Georgia, "Times New Roman", serif;
     color: #111;
-    background: #fdfdfb;
+    background: #faf9f5;
     line-height: 1.5;
 }
 h1, h2 { font-weight: normal; }
-a { color: #111; }
-.post-date { color: #666; font-size: 0.9rem; }
+h1 { font-style: italic; text-transform: lowercase; }
+a { color: #111; text-decoration-color: #35c; text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+a:hover { color: #35c; }
+.site-title { margin-bottom: 2.5rem; }
+.site-title a {
+    font-style: italic;
+    font-size: 1.6rem;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    color: #111;
+}
+.post-date { color: #999; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
 .about-section { margin-bottom: 3rem; }
 .page-wrap {
     position: relative;
@@ -35,8 +55,11 @@ a { color: #111; }
 }
 .page-image {
     width: 100%;
-    border: 1px solid #ddd;
+    height: auto;
     display: block;
+    border: none;
+    border-radius: 2px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 6px 20px rgba(0, 0, 0, 0.05);
 }
 .link-overlay {
     position: absolute;
@@ -44,9 +67,34 @@ a { color: #111; }
     background-color: #35c;
     mix-blend-mode: screen;
 }
+h2.posts-heading {
+    font-style: italic;
+    font-weight: normal;
+    color: #666;
+    margin-top: 2rem;
+}
 ul.post-list { list-style: none; padding: 0; }
-ul.post-list li { margin-bottom: 1.2rem; }
+ul.post-list li {
+    display: flex;
+    gap: 1rem;
+    align-items: baseline;
+    margin-bottom: 0.8rem;
+}
+ul.post-list .post-date { min-width: 7.5rem; }
 footer { margin-top: 4rem; color: #999; font-size: 0.85rem; }
+
+@media (prefers-color-scheme: dark) {
+    body { background: #1c1c1c; color: #ddd; }
+    a { color: #ddd; }
+    a:hover { color: #7aa5f0; }
+    .site-title a { color: #ddd; }
+    .page-image {
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 4px 24px rgba(0, 0, 0, 0.5);
+    }
+    .post-date { color: #888; }
+    h2.posts-heading { color: #999; }
+    footer { color: #777; }
+}
 """
 
 
@@ -115,18 +163,47 @@ def _format_date(created_time_ms: str) -> str:
         return ""
 
 
-def _render_page(image_path: str, page_num: int, links: list[LinkRegion]) -> str:
+def _png_dimensions(path: Path) -> tuple[int, int]:
+    """Read a PNG's width/height straight from its IHDR chunk, no dependency needed.
+
+    Parameters
+    ----------
+    path : Path
+        Path to a PNG file.
+
+    Returns
+    -------
+    tuple of int
+        ``(width, height)``.
+    """
+    with open(path, "rb") as f:
+        f.seek(16)
+        width, height = struct.unpack(">II", f.read(8))
+    return width, height
+
+
+def _render_page(
+    image_path: str,
+    dims: tuple[int, int],
+    alt_text: str,
+    links: list[LinkRegion],
+    eager: bool,
+) -> str:
     """Render one page's image wrapped with any detected link overlays.
 
     Parameters
     ----------
     image_path : str
         Relative path (from the HTML file referencing it) to this page's PNG.
-    page_num : int
-        1-indexed page number, used for the image's alt text.
+    dims : tuple of int
+        ``(width, height)`` of the image, to prevent layout shift while it loads.
+    alt_text : str
+        Vision-model-generated description of the page, for accessibility/SEO.
     links : list of LinkRegion
         Handwritten links detected on this page (bounding boxes are
         approximate -- a vision model's estimate, not pixel-exact).
+    eager : bool
+        Load this image eagerly (first page of a post) rather than lazily.
 
     Returns
     -------
@@ -141,25 +218,53 @@ def _render_page(image_path: str, page_num: int, links: list[LinkRegion]) -> str
         f'height:{(link.bbox[3] - link.bbox[1]) * 100:.2f}%"></a>'
         for link in links
     )
+    loading = "eager" if eager else "lazy"
     return (
         f'<div class="page-wrap">\n'
-        f'<img class="page-image" src="{image_path}" alt="Page {page_num}">\n'
+        f'<img class="page-image" src="{image_path}" alt="{html.escape(alt_text)}" '
+        f'width="{dims[0]}" height="{dims[1]}" loading="{loading}" decoding="async">\n'
         f"{overlays}\n</div>"
     )
 
 
 def _render_pages(
-    page_image_paths: list[str], page_links: list[list[LinkRegion]]
+    page_image_paths: list[str],
+    page_dims: list[tuple[int, int]],
+    page_alt_text: list[str],
+    page_links: list[list[LinkRegion]],
 ) -> str:
     return "\n".join(
-        _render_page(path, i + 1, links)
-        for i, (path, links) in enumerate(zip(page_image_paths, page_links))
+        _render_page(path, dims, alt_text, links, eager=(i == 0))
+        for i, (path, dims, alt_text, links) in enumerate(
+            zip(page_image_paths, page_dims, page_alt_text, page_links)
+        )
     )
+
+
+def _head(title: str, description: str, og_image: str | None) -> str:
+    og_image_tag = (
+        f'<meta property="og:image" content="{html.escape(og_image)}">'
+        if og_image
+        else ""
+    )
+    return f"""<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="{FAVICON}">
+<title>{html.escape(title)}</title>
+<meta name="description" content="{html.escape(description)}">
+<meta property="og:title" content="{html.escape(title)}">
+<meta property="og:description" content="{html.escape(description)}">
+<meta property="og:type" content="article">
+{og_image_tag}
+<meta name="twitter:card" content="summary_large_image">
+<style>{STYLE}</style>"""
 
 
 def render_post(
     post: PostInfo,
     page_image_paths: list[str],
+    page_dims: list[tuple[int, int]],
+    page_alt_text: list[str],
     page_links: list[list[LinkRegion]] | None = None,
 ) -> str:
     """Render a single post's HTML page.
@@ -170,6 +275,10 @@ def render_post(
         The notebook being rendered.
     page_image_paths : list of str
         Relative (from the post HTML file) paths to each page's PNG image.
+    page_dims : list of (int, int)
+        Pixel dimensions of each page image, same order as ``page_image_paths``.
+    page_alt_text : list of str
+        Vision-model alt text for each page, same order as ``page_image_paths``.
     page_links : list of (list of LinkRegion), optional
         Detected handwritten links per page, same order as
         ``page_image_paths``. Pages with no detected links can use an empty
@@ -183,26 +292,31 @@ def render_post(
     title = html.escape(post.name)
     if page_links is None:
         page_links = [[] for _ in page_image_paths]
-    images_html = _render_pages(page_image_paths, page_links)
+    images_html = _render_pages(page_image_paths, page_dims, page_alt_text, page_links)
+    og_image = (
+        f"{SITE_URL}/{page_image_paths[0].removeprefix('../')}"
+        if page_image_paths
+        else None
+    )
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<title>{title}</title>
-<style>{STYLE}</style>
+{_head(post.name, page_alt_text[0] if page_alt_text else SITE_DESCRIPTION, og_image)}
 </head>
 <body>
-<p><a href="../index.html">&larr; back</a></p>
+<header class="site-title"><a href="../index.html">marginalia</a></header>
 <h1>{title}</h1>
 <p class="post-date">{_format_date(post.created_time)}</p>
 {images_html}
-<footer>Written by hand, published from a reMarkable.</footer>
+<footer>Written by hand, published from a <a href="https://remarkable.com">reMarkable</a>.</footer>
 </body>
 </html>
 """
 
 
-def render_index(posts: list[PostInfo], about_pages_html: str = "") -> str:
+def render_index(
+    posts: list[PostInfo], about_pages_html: str = "", about_og_image: str | None = None
+) -> str:
     """Render the site index listing all posts, newest first.
 
     Parameters
@@ -212,6 +326,9 @@ def render_index(posts: list[PostInfo], about_pages_html: str = "") -> str:
     about_pages_html : str, optional
         Pre-rendered HTML for the About/intro page's images, shown above
         the post list. Empty string if there is no About page.
+    about_og_image : str, optional
+        Absolute URL to the About page's first image, used as the site's
+        social-share preview image if present.
 
     Returns
     -------
@@ -219,11 +336,16 @@ def render_index(posts: list[PostInfo], about_pages_html: str = "") -> str:
         Full HTML document for the index page.
     """
     ordered = sorted(posts, key=lambda p: p.created_time, reverse=True)
-    items = "\n".join(
-        f'<li><a href="posts/{post_slug(p)}.html">{html.escape(p.name)}</a> '
-        f'<span class="post-date">{_format_date(p.created_time)}</span></li>'
-        for p in ordered
-    )
+    if ordered:
+        items = "\n".join(
+            f'<li><span class="post-date">{_format_date(p.created_time)}</span>'
+            f'<a href="posts/{post_slug(p)}.html">{html.escape(p.name)}</a></li>'
+            for p in ordered
+        )
+        list_section = f'<h2 class="posts-heading">posts</h2>\n<ul class="post-list">\n{items}\n</ul>'
+    else:
+        list_section = ""
+
     about_section = (
         f'<div class="about-section">{about_pages_html}</div>'
         if about_pages_html
@@ -232,23 +354,22 @@ def render_index(posts: list[PostInfo], about_pages_html: str = "") -> str:
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<title>Marginalia</title>
-<style>{STYLE}</style>
+{_head("marginalia", SITE_DESCRIPTION, about_og_image)}
 </head>
 <body>
+<header class="site-title"><a href="index.html">marginalia</a></header>
 {about_section}
-<ul class="post-list">
-{items}
-</ul>
-<footer>Written by hand, published from a reMarkable.</footer>
+{list_section}
+<footer>Written by hand, published from a <a href="https://remarkable.com">reMarkable</a>.</footer>
 </body>
 </html>
 """
 
 
 def write_site(
-    posts_with_pages: list[tuple[PostInfo, list[Path], list[list[LinkRegion]]]],
+    posts_with_pages: list[
+        tuple[PostInfo, list[Path], list[str], list[list[LinkRegion]]]
+    ],
     docs_dir: Path,
 ) -> None:
     """Write the full static site (index + posts + images) into a docs directory.
@@ -263,9 +384,9 @@ def write_site(
 
     Parameters
     ----------
-    posts_with_pages : list of (PostInfo, list of Path, list of list of LinkRegion)
-        Each post paired with its ordered page PNG paths and per-page
-        detected links.
+    posts_with_pages : list of (PostInfo, list of Path, list of str, list of list of LinkRegion)
+        Each post paired with its ordered page PNG paths, per-page alt
+        text, and per-page detected links.
     docs_dir : Path
         Output directory (e.g. a repo's ``docs/`` folder for GitHub Pages).
     """
@@ -278,29 +399,39 @@ def write_site(
 
     regular_posts = []
     about_html = ""
+    about_og_image = None
 
-    for post, page_paths, page_links in posts_with_pages:
+    for post, page_paths, page_alt_text, page_links in posts_with_pages:
         slug = post_slug(post)
         post_image_dir = images_dir / slug
         post_image_dir.mkdir(parents=True, exist_ok=True)
 
+        dests = []
         for i, src in enumerate(page_paths):
             dest = post_image_dir / f"page_{i:03d}.png"
             dest.write_bytes(src.read_bytes())
+            dests.append(dest)
+        page_dims = [_png_dimensions(d) for d in dests]
 
         if is_about_page(post):
             about_paths = [
                 f"images/{slug}/page_{i:03d}.png" for i in range(len(page_paths))
             ]
-            about_html = _render_pages(about_paths, page_links)
+            about_html = _render_pages(
+                about_paths, page_dims, page_alt_text, page_links
+            )
+            if about_paths:
+                about_og_image = f"{SITE_URL}/{about_paths[0]}"
             continue
 
         relative_paths = [
             f"../images/{slug}/page_{i:03d}.png" for i in range(len(page_paths))
         ]
         (posts_dir / f"{slug}.html").write_text(
-            render_post(post, relative_paths, page_links)
+            render_post(post, relative_paths, page_dims, page_alt_text, page_links)
         )
         regular_posts.append(post)
 
-    (docs_dir / "index.html").write_text(render_index(regular_posts, about_html))
+    (docs_dir / "index.html").write_text(
+        render_index(regular_posts, about_html, about_og_image)
+    )
