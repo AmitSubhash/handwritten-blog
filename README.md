@@ -17,6 +17,27 @@ static site via GitHub Pages. Inspired by
 Only notebooks explicitly filed into the "Blog" folder are ever published.
 Everything else on the tablet stays private.
 
+## Notebook naming conventions (what to name a notebook to make it do something)
+
+Everything the site does is driven by what you name a notebook inside the
+**Blog** folder — no config to edit:
+
+| Notebook name | What it becomes |
+|---|---|
+| `Blog` (folder) | The one folder that gets published. Nothing outside it is ever touched. |
+| `Hi` or `About` | The intro shown at the top of the main page (not listed as a post). |
+| `wordmark` or `title` | The handwritten site header / home link (your "amit"). Renders on post pages; the main page shows no header. |
+| anything else | A normal blog post, listed newest-first. |
+
+Publishing is automatic: file a notebook into `Blog`, and it goes live within
+~2 hours (or instantly when you triple-tap the power button). Run
+`python generate.py` yourself for an immediate manual build.
+
+Two things happen to every published page automatically: it's cropped to the
+ink and each content block is horizontally centered (see
+`~/.claude/skills/handwriting-block-center`). Write a URL by hand and it
+becomes a clickable link (below).
+
 ## Hyperlinks in handwriting
 
 If you write a URL by hand on a page (e.g. `example.com/paper`), it becomes
