@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -91,6 +92,101 @@ def convert_page_to_png(rm_path: Path, out_png: Path) -> None:
         ],
         check=True,
     )
+    _center_ink_horizontally(out_png)
+
+
+def _center_ink_horizontally(png_path: Path) -> None:
+    """Pad one side so the ink's horizontal center-of-mass sits at the middle.
+
+    Handwriting is often composed a little off-center on the page (short lines
+    drift left/right of the long ones); trimming to the ink bbox preserves
+    that lean. This nudges the whole page so the writing reads as centered,
+    at the cost of a little asymmetric whitespace (invisible on the seamless
+    background). A page already centered gets ~zero padding.
+
+    Parameters
+    ----------
+    png_path : Path
+        The rendered, trimmed page PNG (modified in place).
+    """
+    centroid = _ink_centroid_x(png_path)
+    width = int(
+        subprocess.run(
+            ["magick", str(png_path), "-format", "%w", "info:"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    )
+    offset = round(width * abs(1 - 2 * centroid))
+    if offset < 2:
+        return
+    # Splice adds whitespace on the gravity side: pad the side the ink leans
+    # toward, pushing the writing back to the middle.
+    gravity = "west" if centroid < 0.5 else "east"
+    subprocess.run(
+        [
+            "magick",
+            str(png_path),
+            "-background",
+            "white",
+            "-gravity",
+            gravity,
+            "-splice",
+            f"{offset}x0",
+            "-strip",
+            str(png_path),
+        ],
+        check=True,
+    )
+
+
+def _ink_centroid_x(png_path: Path) -> float:
+    """Return the horizontal center-of-mass of the ink, as a 0..1 fraction.
+
+    Parameters
+    ----------
+    png_path : Path
+        A page PNG (dark ink on white).
+
+    Returns
+    -------
+    float
+        0.5 means perfectly centered; < 0.5 means ink leans left.
+    """
+    bins = 400
+    out = subprocess.run(
+        [
+            "magick",
+            str(png_path),
+            "-threshold",
+            "50%",
+            "-negate",
+            "-resize",
+            f"{bins}x1!",
+            "txt:-",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+    total = 0.0
+    weighted = 0.0
+    for line in out.splitlines():
+        m = re.match(r"(\d+),0:", line)
+        if not m:
+            continue
+        g = re.search(r"gray\((\d+)", line) or re.search(r"\((\d+)", line)
+        if not g:
+            continue
+        x = int(m.group(1))
+        value = int(g.group(1))
+        total += value
+        weighted += x * value
+    if total == 0:
+        return 0.5
+    return (weighted / total) / bins
 
 
 def convert_post_pages(post: PostInfo, cache_dir: Path, out_dir: Path) -> list[Path]:

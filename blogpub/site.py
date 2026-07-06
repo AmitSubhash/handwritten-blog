@@ -417,13 +417,16 @@ def render_index(
         if about_pages_html
         else ""
     )
+    # The main page carries no wordmark header of its own -- it's the intro.
+    # A wordmark, if present, is only shown on individual post pages.
+    header = _site_header("index.html", wordmark_src) if wordmark_src else ""
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 {_head("marginalia", SITE_DESCRIPTION, about_og_image)}
 </head>
 <body>
-{_site_header("index.html", wordmark_src)}
+{header}
 {about_section}
 {list_section}
 </body>
@@ -466,12 +469,10 @@ def write_site(
     posts_dir.mkdir(parents=True, exist_ok=True)
     images_dir.mkdir(parents=True, exist_ok=True)
 
-    wordmark_index_src = None
     wordmark_post_src = None
     (docs_dir / "wordmark.png").unlink(missing_ok=True)
     if wordmark_image is not None:
         (docs_dir / "wordmark.png").write_bytes(wordmark_image.read_bytes())
-        wordmark_index_src = "wordmark.png"
         wordmark_post_src = "../wordmark.png"
 
     regular_posts = []
@@ -516,6 +517,9 @@ def write_site(
         )
         regular_posts.append(post)
 
+    # The main page is the handwritten intro itself, so it doesn't repeat the
+    # "amit" wordmark up top (that'd duplicate the "I'm Amit" in the intro).
+    # The wordmark stays as the header / home link on individual post pages.
     (docs_dir / "index.html").write_text(
-        render_index(regular_posts, about_html, about_og_image, wordmark_index_src)
+        render_index(regular_posts, about_html, about_og_image, wordmark_src=None)
     )
