@@ -39,7 +39,7 @@ h1, h2 { font-weight: normal; }
 h1 { font-style: italic; text-transform: lowercase; }
 a { color: #111; text-decoration-color: #35c; text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
 a:hover { color: #35c; }
-.site-title { margin-bottom: 2.5rem; }
+.site-title { text-align: center; margin: 1.5rem 0 3rem; }
 .site-title a {
     font-style: italic;
     font-size: 1.6rem;
@@ -48,8 +48,24 @@ a:hover { color: #35c; }
     color: #111;
     display: inline-block;
 }
-.wordmark { height: 3.2rem; width: auto; display: block; }
-.post-date { color: #999; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+/* Size the handwritten wordmark by height (a single word); clamp so it never
+   becomes the biggest thing on a phone as the ink pages scale down. */
+.wordmark {
+    height: clamp(2.2rem, 6vw, 3.4rem);
+    width: auto;
+    display: block;
+    margin: 0 auto;
+}
+.site-title a:hover .wordmark { opacity: 0.55; }
+/* Dates are the only typeset text left; keep them quiet, like the printed
+   page numbers in a real notebook rather than body copy. */
+.post-date {
+    color: #aaa;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+}
 .about-section { margin-bottom: 3rem; }
 /* The handwriting sits directly on the page: the scanned paper is pure white,
    the page is pure white, and there is no border or shadow -- so the ink
@@ -69,7 +85,10 @@ a:hover { color: #35c; }
     display: block;
     background-color: #35c;
     mix-blend-mode: screen;
+    transition: opacity 0.12s;
 }
+.link-overlay:hover { opacity: 0.55; }
+.link-overlay:focus-visible { outline: 2px solid #35c; outline-offset: 2px; }
 h2.posts-heading {
     font-style: italic;
     font-weight: normal;
@@ -202,7 +221,7 @@ def is_about_page(post: PostInfo) -> bool:
 def _format_date(created_time_ms: str) -> str:
     try:
         dt = datetime.fromtimestamp(int(created_time_ms) / 1000, tz=timezone.utc)
-        return dt.strftime("%B %-d, %Y")
+        return dt.strftime("%-d %b %Y")
     except (ValueError, OSError):
         return ""
 
