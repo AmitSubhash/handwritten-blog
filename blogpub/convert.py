@@ -110,8 +110,7 @@ def convert_post_pages(post: PostInfo, cache_dir: Path, out_dir: Path) -> list[P
     list of Path
         PNG paths in page order.
     """
-    content = json.loads((cache_dir / f"{post.uuid}.content").read_text())
-    page_ids = [page["id"] for page in content["cPages"]["pages"]]
+    page_ids = first_page_ids(post, cache_dir)
 
     png_paths = []
     for i, page_id in enumerate(page_ids):
@@ -122,3 +121,122 @@ def convert_post_pages(post: PostInfo, cache_dir: Path, out_dir: Path) -> list[P
         convert_page_to_png(rm_path, out_png)
         png_paths.append(out_png)
     return png_paths
+
+
+def first_page_ids(post: PostInfo, cache_dir: Path) -> list[str]:
+    """Return a notebook's page ids in reading order.
+
+    Parameters
+    ----------
+    post : PostInfo
+        The notebook.
+    cache_dir : Path
+        Local cache directory containing the pulled ``.content`` file.
+
+    Returns
+    -------
+    list of str
+        Page ids in order.
+    """
+    content = json.loads((cache_dir / f"{post.uuid}.content").read_text())
+    return [page["id"] for page in content["cPages"]["pages"]]
+
+
+def wordmark_render_is_clean(png_path: Path, threshold: float = 0.25) -> bool:
+    """Heuristic: does a rendered wordmark look like clean handwriting, not a
+    filled blob?
+
+    Some reMarkable pens (Calligraphy, thick brushes) don't convert cleanly
+    through rmc -- their variable-width strokes render as solid jagged shapes.
+    A filled shape survives a several-pixel erosion; thin handwriting mostly
+    disappears. So the fraction of ink that survives erosion cleanly separates
+    the two (measured: ~0.5 for a Calligraphy blob, ~0.08 for a Fineliner).
+
+    Parameters
+    ----------
+    png_path : Path
+        The rendered wordmark PNG.
+    threshold : float, optional
+        Survival ratio above which the render is treated as a blob.
+
+    Returns
+    -------
+    bool
+        True if the render looks like clean handwriting.
+    """
+    ink = float(
+        subprocess.run(
+            [
+                "magick",
+                str(png_path),
+                "-threshold",
+                "50%",
+                "-format",
+                "%[fx:1-mean]",
+                "info:",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    )
+    if ink <= 0:
+        return False
+    survived = float(
+        subprocess.run(
+            [
+                "magick",
+                str(png_path),
+                "-threshold",
+                "50%",
+                "-negate",
+                "-morphology",
+                "Erode",
+                "Disk:6",
+                "-format",
+                "%[fx:mean]",
+                "info:",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    )
+    return (survived / ink) < threshold
+
+
+def thumbnail_to_wordmark(thumb_path: Path, out_png: Path) -> None:
+    """Turn a device page thumbnail into a clean wordmark image.
+
+    The device renders every pen correctly (unlike rmc), just at low
+    resolution -- fine for a small header. Removes the page's faint ruled
+    template lines by pushing near-white to pure white while keeping the
+    ink's grayscale anti-aliasing, then trims tight and pads.
+
+    Parameters
+    ----------
+    thumb_path : Path
+        The device thumbnail PNG for the wordmark page.
+    out_png : Path
+        Destination path for the cleaned wordmark PNG.
+    """
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            "magick",
+            str(thumb_path),
+            "-colorspace",
+            "Gray",
+            "-white-threshold",
+            "72%",
+            "-trim",
+            "+repage",
+            "-bordercolor",
+            "white",
+            "-border",
+            "12",
+            "-strip",
+            str(out_png),
+        ],
+        check=True,
+    )

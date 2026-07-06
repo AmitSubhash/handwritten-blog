@@ -8,7 +8,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-from blogpub.convert import convert_post_pages
+from blogpub.convert import (
+    convert_post_pages,
+    first_page_ids,
+    thumbnail_to_wordmark,
+    wordmark_render_is_clean,
+)
 from blogpub.links import (
     analyze_page_cached,
     load_manual_links,
@@ -16,14 +21,53 @@ from blogpub.links import (
     save_vision_cache,
 )
 from blogpub.pull import (
+    PostInfo,
     find_folder_uuid,
     list_posts_in_folder,
     pull_metadata,
     pull_notebook_pages,
+    pull_thumbnails,
 )
 from blogpub.site import is_wordmark, write_site
 
 FALLBACK_ALT_TEXT = "A handwritten notebook page."
+
+
+def _build_wordmark(
+    post: PostInfo,
+    rmc_render: Path,
+    cache_dir: Path,
+    pages_dir: Path,
+    ssh_host: str,
+) -> Path | None:
+    """Choose the best wordmark image for a "wordmark" notebook.
+
+    Prefers rmc's high-resolution render, but if that comes out as a filled
+    blob (thick / Calligraphy pen), falls back to the device's own thumbnail
+    render, which handles every pen correctly at lower resolution -- fine for
+    a small header. Returns None if neither is usable (typeset fallback).
+    """
+    if wordmark_render_is_clean(rmc_render):
+        print("  -> using as handwritten site wordmark")
+        return rmc_render
+
+    print(
+        "  -> rmc render looks like a filled blob (thick/Calligraphy pen); "
+        "trying the device thumbnail instead",
+        file=sys.stderr,
+    )
+    if pull_thumbnails(ssh_host, post.uuid, cache_dir):
+        page_ids = first_page_ids(post, cache_dir)
+        if page_ids:
+            thumb = cache_dir / f"{post.uuid}.thumbnails" / f"{page_ids[0]}.png"
+            if thumb.exists():
+                out = pages_dir / "wordmark.png"
+                thumbnail_to_wordmark(thumb, out)
+                print("  -> using device thumbnail as handwritten site wordmark")
+                return out
+
+    print("  -> no usable wordmark render; keeping typeset fallback", file=sys.stderr)
+    return None
 
 
 def main() -> None:
@@ -93,8 +137,9 @@ def main() -> None:
             # A notebook named "wordmark"/"title" is the handwritten site
             # header, not a post -- use its first page and skip the rest.
             if is_wordmark(post):
-                wordmark_image = png_paths[0]
-                print("  -> using as handwritten site wordmark")
+                wordmark_image = _build_wordmark(
+                    post, png_paths[0], cache_dir, pages_dir, args.ssh_host
+                )
                 continue
 
             if args.no_vision:

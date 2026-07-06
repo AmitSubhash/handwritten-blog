@@ -51,7 +51,7 @@ a:hover { color: #35c; }
 /* Size the handwritten wordmark by height (a single word); clamp so it never
    becomes the biggest thing on a phone as the ink pages scale down. */
 .wordmark {
-    height: clamp(2.2rem, 6vw, 3.4rem);
+    height: clamp(2.6rem, 7vw, 4rem);
     width: auto;
     display: block;
     margin: 0 auto;

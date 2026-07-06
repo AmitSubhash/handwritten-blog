@@ -88,6 +88,40 @@ def pull_notebook_pages(ssh_host: str, uuid: str, cache_dir: Path) -> None:
     )
 
 
+def pull_thumbnails(ssh_host: str, uuid: str, cache_dir: Path) -> bool:
+    """Pull a notebook's device-rendered page thumbnails, if any.
+
+    The device renders every pen type correctly (unlike rmc), so its
+    thumbnails are a low-res-but-clean fallback for pages that rmc mangles.
+
+    Parameters
+    ----------
+    ssh_host : str
+        SSH host alias for the tablet.
+    uuid : str
+        UUID of the notebook.
+    cache_dir : Path
+        Local cache directory.
+
+    Returns
+    -------
+    bool
+        True if a thumbnails directory was pulled, False if none exists.
+    """
+    if not _UUID_RE.match(uuid):
+        raise ValueError(f"refusing to pull suspicious uuid: {uuid!r}")
+    result = subprocess.run(
+        [
+            "rsync",
+            "-az",
+            f"{ssh_host}:{REMOTE_XOCHITL}/{uuid}.thumbnails/",
+            f"{cache_dir}/{uuid}.thumbnails/",
+        ],
+        capture_output=True,
+    )
+    return result.returncode == 0
+
+
 def find_folder_uuid(cache_dir: Path, folder_name: str) -> str | None:
     """Find a CollectionType (folder) document by name, case-insensitively.
 
