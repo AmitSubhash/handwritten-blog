@@ -42,7 +42,13 @@ def _patch_palette() -> None:
 
 
 def convert_page_to_png(rm_path: Path, out_png: Path) -> None:
-    """Convert a single ``.rm`` page file to a PNG at native resolution.
+    """Convert a single ``.rm`` page file to a PNG at the page's native width.
+
+    Renders to a fixed *width* and lets the height follow the page's real
+    aspect ratio. reMarkable pages are a fixed width but a *variable* height --
+    an extended / scrolling page can be several times taller than a standard
+    one -- so forcing a fixed height (the old ``-h``) squashed tall pages
+    vertically and stretched them horizontally into an unreadable smear.
 
     Parameters
     ----------
@@ -62,15 +68,7 @@ def convert_page_to_png(rm_path: Path, out_png: Path) -> None:
 
     out_png.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
-        [
-            "rsvg-convert",
-            "-w",
-            str(PAGE_WIDTH),
-            "-h",
-            str(PAGE_HEIGHT),
-            "-o",
-            str(out_png),
-        ],
+        ["rsvg-convert", "-w", str(PAGE_WIDTH), "-o", str(out_png)],
         input=svg_buffer.getvalue().encode(),
         check=True,
     )
